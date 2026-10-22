@@ -92,9 +92,15 @@ rtharness selftest        # exits 0 on PASS, 1 on FAIL — drop it in CI
 dashboard) share the exact same scan engine.
 
 ```bash
-rtharness serve                      # http://127.0.0.1:8900  (dashboard at /)
+pip install 'rtharness[server]'      # FastAPI + uvicorn (optional)
+rtharness serve                      # http://127.0.0.1:8900  (dashboard /, API docs /docs)
 rtharness serve --host 0.0.0.0 --port 8900   # (prints a warning: no auth, local-only tool)
 ```
+
+The service runs on **FastAPI** when `rtharness[server]` is installed (giving
+OpenAPI docs at `/docs` and the `/mcp` tool endpoint below); if it isn't, it
+transparently falls back to a **zero-dependency stdlib server** so `serve`
+always works.
 
 REST API (all JSON):
 
@@ -116,6 +122,41 @@ curl -s "localhost:8900/scan/ab12cd34ef56/report?format=html" -o report.html
 
 The service is a **local operator tool**: it binds to `127.0.0.1`, has no auth,
 and launches scans against targets you specify — don't expose it publicly.
+
+### Let other agents call rtharness (MCP tool server)
+
+rtharness also exposes **itself** as an MCP server at `POST /mcp`, offering two
+tools — `scan_agent` and `list_probes`. Any agent framework that speaks MCP
+(Google ADK, LangGraph, Claude, …) can therefore invoke the harness as a tool
+with **no bespoke integration**:
+
+```jsonc
+// POST /mcp  — JSON-RPC 2.0
+{"jsonrpc":"2.0","id":1,"method":"tools/call",
+ "params":{"name":"scan_agent",
+           "arguments":{"target":{"type":"a2a","base_url":"http://localhost:9999"},"tier":2}}}
+```
+
+Example: give a Google **ADK** agent the ability to red-team other agents by
+pointing ADK's MCP toolset at this endpoint —
+
+```python
+from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool import MCPToolset, StreamableHTTPConnectionParams
+
+redteam = MCPToolset(connection_params=StreamableHTTPConnectionParams(
+    url="http://localhost:8900/mcp"))
+agent = LlmAgent(model="gemini-2.0-flash", name="security_reviewer",
+                 tools=[redteam])  # can now call scan_agent / list_probes
+```
+
+> **Design note — why rtharness is *not* itself an ADK agent.** The harness is a
+> framework-neutral *tester*; making the product an ADK (or any single
+> framework's) agent would couple it to one ecosystem and bury the deterministic
+> scan engine under an unnecessary LLM layer. Exposing it as an **MCP tool**
+> (and a REST API, and an A2A-callable surface) keeps it callable from *every*
+> framework — and lets rtharness red-team its own MCP server, dogfooding the MCP
+> probes.
 
 ## Do I need an LLM API key?
 
