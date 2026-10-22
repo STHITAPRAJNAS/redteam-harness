@@ -70,11 +70,15 @@ class MCPTarget(Target):
             self.headers["Authorization"] = "Bearer " + key
         self.session_id: Optional[str] = None
         self.tools: List[Dict[str, Any]] = []
+        self.resources: List[Dict[str, Any]] = []
+        self.prompts: List[Dict[str, Any]] = []
         self._initialised = False
         if auto_init:
             try:
                 self.initialize()
                 self.list_tools()
+                self.list_resources()
+                self.list_prompts()
             except Exception:  # noqa: BLE001 - surfaced later per-call
                 pass
 
@@ -123,6 +127,43 @@ class MCPTarget(Target):
         data = self._rpc("tools/list", {})
         self.tools = ((data or {}).get("result") or {}).get("tools", []) or []
         return self.tools
+
+    def list_resources(self) -> List[Dict[str, Any]]:
+        if not self._initialised:
+            self.initialize()
+        try:
+            data = self._rpc("resources/list", {})
+            self.resources = ((data or {}).get("result") or {}).get("resources", []) or []
+        except Exception:  # noqa: BLE001 - server may not support resources
+            self.resources = []
+        return self.resources
+
+    def list_prompts(self) -> List[Dict[str, Any]]:
+        if not self._initialised:
+            self.initialize()
+        try:
+            data = self._rpc("prompts/list", {})
+            self.prompts = ((data or {}).get("result") or {}).get("prompts", []) or []
+        except Exception:  # noqa: BLE001 - server may not support prompts
+            self.prompts = []
+        return self.prompts
+
+    def read_resource(self, uri: str) -> str:
+        data = self._rpc("resources/read", {"uri": uri})
+        contents = ((data or {}).get("result") or {}).get("contents", []) or []
+        return "\n".join(c.get("text", "") for c in contents if isinstance(c, dict))
+
+    def get_prompt(self, name: str, arguments: Optional[dict] = None) -> str:
+        data = self._rpc("prompts/get", {"name": name, "arguments": arguments or {}})
+        msgs = ((data or {}).get("result") or {}).get("messages", []) or []
+        out = []
+        for m in msgs:
+            content = m.get("content") if isinstance(m, dict) else None
+            if isinstance(content, dict):
+                out.append(content.get("text", ""))
+            elif isinstance(content, list):
+                out += [c.get("text", "") for c in content if isinstance(c, dict)]
+        return "\n".join(out)
 
     def call_tool(self, name: str, arguments: dict) -> Response:
         def _call():

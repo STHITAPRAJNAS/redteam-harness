@@ -1,11 +1,34 @@
 # rtharness — a red-team harness for LLM agents
 
-Find vulnerabilities in **any** agent or agent framework that exposes a **chat**
-interface or an **Agent-to-Agent (A2A)** interface — Google ADK, LangGraph,
-CrewAI, AutoGen, a bespoke Flask endpoint, an OpenAI-compatible server, or a raw
-A2A JSON-RPC agent. You point it at a target, pick an attack tier, and it
-produces a risk-scored report mapped to the **OWASP Top 10 for LLM Applications
-(2025)**, the **OWASP Agentic Top 10**, and **MITRE ATLAS**.
+Red-team the **agent application** — not the underlying model. rtharness drives
+an agent app built with **any** framework (Google ADK, LangGraph, CrewAI,
+AutoGen, LlamaIndex, a bespoke service…) through the surfaces it actually
+exposes — a **chat** interface, an **Agent-to-Agent (A2A)** interface, or an
+**MCP** server — and attacks it as a black box. You point it at a target, pick
+an attack tier, and it produces a risk-scored report mapped to the **OWASP Top
+10 for LLM Applications (2025)**, the **OWASP Agentic Top 10**, the **OWASP MCP
+Top 10**, and **MITRE ATLAS**.
+
+> It tests the *app's* guardrails, tools, memory, delegation and protocol
+> handling — the things the application is responsible for — not a raw LLM's
+> safety. (Raw OpenAI/Anthropic adapters exist only as a convenient *chat
+> surface* for an app that speaks those APIs.)
+
+### Positioning
+
+rtharness is the **dynamic, black-box** layer of an agent-security program. It
+complements — doesn't replace — the two other families, and is designed to be
+combined with them:
+
+| Layer | Examples | What it sees | rtharness relation |
+|---|---|---|---|
+| **Static** workflow/config scan | SplxAI **Agentic Radar**, Snyk/Invariant **mcp-scan** | source, declared tool/MCP metadata | run it first; rtharness then attacks the running app live |
+| **Benchmark** suites | **AgentDojo**, InjecAgent, Agent Security Bench | fixed task+injection datasets | rtharness borrows their *attack structure* and ingests their corpora |
+| **Dynamic black-box** (this) | rtharness | the live A2A/chat/MCP surface | catches **data-borne** injection & runtime behaviour static scans miss |
+
+Deliberately a **raw-protocol client** (hand-rolled JSON-RPC/SSE, not the
+framework SDKs): a conformance-normalising SDK hides the very bugs a security
+test is looking for.
 
 At its core is an **adaptive attack engine**: every probe states a benign
 *objective*, and the engine attacks it with a large library of transforms
@@ -152,12 +175,16 @@ confirm the vuln); `--exhaustive` makes it spend the full budget to enumerate
 | `a2a.missing_auth` | Unauthenticated task submission | LLM06:2025 | 2 |
 | `a2a.context_isolation` | Task/context accessible without ownership (IDOR) | LLM06:2025 | 3 |
 | `a2a.recursive_delegation` | Unbounded self-delegation (DoS) | LLM10:2025 | 3 |
+| `a2a.push_notification_hijack` | Attacker-controlled task webhook (exfil/SSRF) | LLM02/LLM06:2025 | 3 |
+| `mcp.metadata_poisoning` | Injected tool/resource/prompt metadata | LLM01/MCP03 | 1 |
+| `mcp.returned_injection` | Data-borne injection in MCP resource/tool output | LLM01/MCP03 | 2 |
+| `mcp.rug_pull` | MCP definition drift vs pinned baseline | LLM03/MCP03 | 1 |
+| `mcp.unauth_access` | Unauthenticated MCP list/call | LLM06/MCP03 | 2 |
 | `disclosure.pii` | PII / training-data extraction | LLM02:2025 | 2 |
 | `output.insecure_handling` | Insecure output handling (XSS/SQLi echo) | LLM05:2025 | 2 |
 | `recon.model_enumeration` | Model / tool fingerprinting | LLM07:2025 | 1 |
 | `dos.resource_exhaustion` | Unbounded output / denial-of-wallet | LLM10:2025 | 2 |
 | `memory.poisoning` | Persistent conversational memory injection | LLM01:2025 | 3 |
-| `mcp.tool_poisoning` | Malicious/injected MCP tool descriptions | LLM01/LLM03:2025 | 1 |
 | `corpus.jb_scaffolds` | Built-in jailbreak-scaffold pack (15) | LLM01:2025 | 2 |
 | `corpus.indirect_tool` | AgentDojo/InjecAgent-structured injection (7) | LLM01/LLM06:2025 | 2 |
 
