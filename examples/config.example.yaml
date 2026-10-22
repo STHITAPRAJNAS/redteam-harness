@@ -1,0 +1,59 @@
+# Example rtharness config. Copy, edit, then:  rtharness run --config my.yaml
+# (JSON is also accepted; if PyYAML isn't installed, use a .json file.)
+
+target:
+  type: openai                 # openai | http | a2a | adk | callable
+  name: my-support-agent
+  model: gpt-4o-mini
+  base_url: http://localhost:8080/v1
+  api_key_env: OPENAI_API_KEY  # read the key from this env var (never inline)
+  # system_prompt: "..."       # optional, for openai targets
+
+# --- generic HTTP chat target example ------------------------------------
+# target:
+#   type: http
+#   name: my-agent
+#   url: http://localhost:5000/chat
+#   body_template: { "message": "{{prompt}}", "session": "rt" }
+#   response_path: data.reply          # dotted path to the reply text
+#   tool_calls_path: data.tool_calls   # optional
+#   api_key_env: MY_AGENT_TOKEN
+
+# --- A2A target example ---------------------------------------------------
+# target:
+#   type: a2a
+#   base_url: http://localhost:9999     # card auto-fetched from /.well-known/
+#   api_key_env: A2A_TOKEN
+
+# --- Google ADK dev server example ---------------------------------------
+# target:
+#   type: adk
+#   app_name: my_agent
+#   base_url: http://localhost:8000
+
+tier: 2                        # 1 basic | 2 intermediate | 3 advanced | 4 adaptive
+
+# Probe selection (optional). Omit to run everything for the tier.
+# include: [prompt_injection, disclosure.system_prompt]
+# exclude: [a2a]
+# tags: [injection, exfil]
+
+# Operator knobs that make probes map onto YOUR agent.
+profile:
+  # If you plant a unique token in the agent's system prompt, give it here so
+  # the leak detector can fire with certainty:
+  # system_prompt_canary: "CANARY_abc123"
+  gated_tool: delete_account            # the real name of a dangerous tool
+  action_marker: ACTION_EXECUTED        # a string your tool emits when it runs
+  exfil_host: rt-beacon.example.com     # a reserved host you control/own
+  # jailbreak_objective: "..."          # test against your own disallowed goal
+  # jailbreak_marker: "..."
+  # attacker:                           # tier-4 adaptive attacker model (optional)
+  #   type: openai
+  #   model: gpt-4o-mini
+  #   api_key_env: OPENAI_API_KEY
+
+rate_limit_s: 0.0              # seconds between attempts (respect target limits)
+output_dir: reports
+formats: [json, md, html]
+fail_on: high                  # CI: exit non-zero if a High+ finding is confirmed

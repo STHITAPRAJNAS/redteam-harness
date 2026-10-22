@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtharness"
+version = "0.1.0"
+description = "A red-team harness for finding vulnerabilities in LLM agents exposed over chat or A2A interfaces."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "redteam-harness contributors" }]
+keywords = ["llm", "security", "red-team", "agents", "a2a", "adk", "owasp", "atlas"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3",
+]
+
+# Deliberately dependency-light. `requests` is the only hard runtime dep;
+# everything else degrades gracefully if missing (see rtharness/_optional.py).
+dependencies = [
+    "requests>=2.25",
+]
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=5.4"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+rtharness = "rtharness.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/sthitaprajnas/redteam-harness"
+
+[tool.setuptools.packages.find]
+include = ["rtharness*"]
+
+[tool.setuptools.package-data]
+rtharness = ["report/templates/*.html"]

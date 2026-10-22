@@ -1,0 +1,213 @@
+"""Command-line interface.
+
+    rtharness list                     # show probes and their tiers/mappings
+    rtharness run --config cfg.yaml    # run an assessment from a config file
+    rtharness run --target openai --model gpt-4o-mini --tier 2
+    rtharness demo                     # run against the built-in mock agent
+
+Reports are written to the output directory in the requested formats, and the
+process exit code reflects ``--fail-on`` for CI gating.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from typing import List, Optional
+
+from . import __version__
+from .config import RunConfig
+from .core import registry
+from .core.result import RunResult, Severity
+from .core.runner import Runner, console_reporter
+from .core.tier import Tier
+from . import probes as _probes  # noqa: F401  (populates the registry)
+from . import report as _report
+from .targets import from_config
+
+
+# --------------------------------------------------------------------------
+def _build_target(cfg: RunConfig):
+    return from_config(cfg.target)
+
+
+def _attach_attacker(cfg: RunConfig) -> None:
+    """If the profile names an attacker model (tier 4), build it as a Target."""
+    att = cfg.profile.get("attacker")
+    if isinstance(att, dict):
+        cfg.profile["attacker_target"] = from_config(att)
+
+
+def _run(cfg: RunConfig, quiet: bool = False) -> RunResult:
+    target = _build_target(cfg)
+    _attach_attacker(cfg)
+    selected = registry.select(
+        cfg.tier, include=cfg.include or None, exclude=cfg.exclude or None,
+        tags=cfg.tags or None, profile=cfg.profile,
+    )
+    if not selected:
+        raise SystemExit("No probes selected. Check --tier/--include/--exclude/--tags.")
+    runner = Runner(
+        target, tier=cfg.tier, rate_limit_s=cfg.rate_limit_s,
+        on_event=console_reporter(verbose=not quiet),
+    )
+    return runner.run(selected)
+
+
+def _write_reports(result: RunResult, cfg: RunConfig) -> List[str]:
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in result.target_name)
+    stem = os.path.join(cfg.output_dir, "rtharness-%s" % safe)
+    written = []
+    fmts = set(cfg.formats)
+    if "all" in fmts:
+        fmts = {"json", "md", "html"}
+    if "json" in fmts:
+        written.append(_report.write_json(result, stem + ".report.json"))
+    if "md" in fmts or "markdown" in fmts:
+        written.append(_report.write_markdown(result, stem + ".report.md"))
+    if "html" in fmts:
+        written.append(_report.write_html(result, stem + ".report.html"))
+    return written
+
+
+def _exit_code(result: RunResult, fail_on: Optional[str]) -> int:
+    if not fail_on:
+        return 0
+    threshold = Severity.parse(fail_on)
+    if result.highest_severity() >= threshold and result.vulnerable_findings:
+        return 2
+    return 0
+
+
+# --------------------------------------------------------------------------
+def cmd_list(args) -> int:
+    tier = Tier.parse(args.tier) if args.tier else Tier.ADAPTIVE
+    probes = registry.select(tier, tags=args.tag or None)
+    print("Probes available up to tier %d (%s):\n" % (int(tier), tier.label))
+    for p in probes:
+        print("  %-28s  min-tier %d  sev=%-8s  %s"
+              % (p.id, int(p.min_tier), p.severity.label, p.title))
+        print("      OWASP: %-22s ATLAS: %s"
+              % (", ".join(p.owasp) or "-", ", ".join(p.atlas) or "-"))
+    print("\n%d probe(s). Tiers: 1 basic, 2 intermediate, 3 advanced, 4 adaptive."
+          % len(probes))
+    return 0
+
+
+def cmd_run(args) -> int:
+    if args.config:
+        cfg = RunConfig.load(args.config)
+    else:
+        if not args.target:
+            raise SystemExit("Provide --config or --target.")
+        target_cfg = {"type": args.target}
+        for key in ("name", "model", "base_url", "url", "app_name",
+                    "api_key_env", "response_path"):
+            val = getattr(args, key, None)
+            if val:
+                target_cfg[key] = val
+        cfg = RunConfig(target=target_cfg)
+    # CLI overrides.
+    if args.tier:
+        cfg.tier = Tier.parse(args.tier)
+    if args.include:
+        cfg.include = args.include
+    if args.exclude:
+        cfg.exclude = args.exclude
+    if args.tag:
+        cfg.tags = args.tag
+    if args.out:
+        cfg.output_dir = args.out
+    if args.format:
+        cfg.formats = args.format
+    if args.fail_on:
+        cfg.fail_on = args.fail_on
+    if args.rate_limit:
+        cfg.rate_limit_s = args.rate_limit
+
+    result = _run(cfg, quiet=args.quiet)
+    written = _write_reports(result, cfg)
+    print("\nReports written:")
+    for p in written:
+        print("  %s" % p)
+    print("\nRisk score: %d/100  |  highest severity: %s  |  %d confirmed finding(s)"
+          % (result.risk_score(), result.highest_severity().label,
+             len(result.vulnerable_findings)))
+    return _exit_code(result, cfg.fail_on)
+
+
+def cmd_demo(args) -> int:
+    """Run against the bundled intentionally-vulnerable mock agent."""
+    from examples.mock_agent import build_callable_target, DEFAULT_PROFILE
+    cfg = RunConfig(
+        target={"type": "callable"},  # placeholder; replaced below
+        tier=Tier.parse(args.tier or 3),
+        profile=dict(DEFAULT_PROFILE),
+        output_dir=args.out or "reports",
+        formats=args.format or ["json", "md", "html"],
+    )
+    target = build_callable_target()
+    selected = registry.select(cfg.tier, profile=cfg.profile)
+    runner = Runner(target, tier=cfg.tier, on_event=console_reporter(True))
+    result = runner.run(selected)
+    written = _write_reports(result, cfg)
+    print("\nDemo reports written:")
+    for p in written:
+        print("  %s" % p)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="rtharness",
+        description="Red-team harness for LLM agents (chat / A2A). "
+                    "For authorised testing only.")
+    p.add_argument("--version", action="version", version="rtharness " + __version__)
+    sub = p.add_subparsers(dest="command", required=True)
+
+    pl = sub.add_parser("list", help="list available probes")
+    pl.add_argument("--tier", help="show probes up to this tier (default: all)")
+    pl.add_argument("--tag", action="append", help="filter by tag (repeatable)")
+    pl.set_defaults(func=cmd_list)
+
+    pr = sub.add_parser("run", help="run an assessment")
+    pr.add_argument("--config", help="path to a YAML/JSON config file")
+    pr.add_argument("--target", help="target type: openai|http|a2a|adk|callable")
+    pr.add_argument("--name", help="target display name")
+    pr.add_argument("--model", help="model id (openai targets)")
+    pr.add_argument("--base-url", dest="base_url", help="base URL")
+    pr.add_argument("--url", help="endpoint URL (http target)")
+    pr.add_argument("--app-name", dest="app_name", help="ADK app name")
+    pr.add_argument("--api-key-env", dest="api_key_env", help="env var holding the API key")
+    pr.add_argument("--response-path", dest="response_path", help="JSON path to reply text (http)")
+    pr.add_argument("--tier", help="attack tier 1-4 (basic..adaptive)")
+    pr.add_argument("--include", action="append", help="only these probe ids/prefixes")
+    pr.add_argument("--exclude", action="append", help="skip these probe ids/prefixes")
+    pr.add_argument("--tag", action="append", help="only probes with these tags")
+    pr.add_argument("--out", help="output directory (default: reports)")
+    pr.add_argument("--format", action="append",
+                    help="report format: json|md|html|all (repeatable)")
+    pr.add_argument("--fail-on", dest="fail_on",
+                    help="exit non-zero if a finding of this severity+ is confirmed")
+    pr.add_argument("--rate-limit", dest="rate_limit", type=float,
+                    help="seconds to sleep between attempts")
+    pr.add_argument("--quiet", action="store_true", help="less progress output")
+    pr.set_defaults(func=cmd_run)
+
+    pd = sub.add_parser("demo", help="run against the bundled mock vulnerable agent")
+    pd.add_argument("--tier", help="attack tier (default 3)")
+    pd.add_argument("--out", help="output directory")
+    pd.add_argument("--format", action="append", help="report format(s)")
+    pd.set_defaults(func=cmd_demo)
+    return p
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

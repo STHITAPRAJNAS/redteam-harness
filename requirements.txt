@@ -1,0 +1,9 @@
+# Core runtime dependency. The harness is intentionally dependency-light so it
+# runs in locked-down / air-gapped assessment environments.
+requests>=2.25
+
+# Optional: nicer config files. JSON configs work without it.
+# PyYAML>=5.4
+
+# Optional: test runner. The suite also runs under stdlib `python -m unittest`.
+# pytest>=7.0
