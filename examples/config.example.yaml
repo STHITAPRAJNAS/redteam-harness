@@ -40,6 +40,9 @@ tier: 2                        # 1 basic | 2 intermediate | 3 advanced | 4 adapt
 
 # Operator knobs that make probes map onto YOUR agent.
 profile:
+  effort: 1.0                           # attack-intensity multiplier (0.3 light .. 3+ heavy)
+  stop_on_first: true                   # false = enumerate every break per objective
+  # seed: 1337                          # make the attack sequence reproducible
   # If you plant a unique token in the agent's system prompt, give it here so
   # the leak detector can fire with certainty:
   # system_prompt_canary: "CANARY_abc123"

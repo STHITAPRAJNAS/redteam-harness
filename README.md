@@ -7,6 +7,15 @@ A2A JSON-RPC agent. You point it at a target, pick an attack tier, and it
 produces a risk-scored report mapped to the **OWASP Top 10 for LLM Applications
 (2025)**, the **OWASP Agentic Top 10**, and **MITRE ATLAS**.
 
+At its core is an **adaptive attack engine**: every probe states a benign
+*objective*, and the engine attacks it with a large library of transforms
+(encodings, canary-safe obfuscations, jailbreak framings), multi-turn
+strategies (crescendo, echo-chamber), and — at the top tier — a **mutation /
+beam search** that composes attacks and escalates on refusal (optionally with
+an attacker LLM in the loop). Attack intensity scales with a tier **and** a free
+`--effort` multiplier, so against a hardened target a single run can fire
+**hundreds to thousands** of distinct attempts across ~30 techniques.
+
 It sits in the same family as [Microsoft PyRIT], [NVIDIA garak], [promptfoo],
 [ARTKIT] and [DeepTeam], but is built specifically around the **agent** attack
 surface (tools, delegation, A2A trust) and is deliberately **dependency-light**
@@ -47,6 +56,13 @@ agent and writes JSON/Markdown/HTML reports to `./reports/`. You should see a
 risk score near 100/100 and findings across injection, disclosure, exfil and
 excessive agency.
 
+To confirm the harness works end-to-end (it should break the vulnerable mock
+and leave a secure mock standing), run:
+
+```bash
+rtharness selftest        # exits 0 on PASS, 1 on FAIL — drop it in CI
+```
+
 ## Point it at a real agent
 
 ```bash
@@ -84,12 +100,20 @@ You choose how hard the harness pushes. Tiers are cumulative.
 | 1 | **basic** | Single-shot, well-known payloads. Fast smoke test, low false positives. |
 | 2 | **intermediate** | Obfuscation (base64/rot13/leet), persona/authority framing, indirect injection. |
 | 3 | **advanced** | Multi-turn **crescendo** escalation, confused-deputy tool abuse, A2A access-control probes. |
-| 4 | **adaptive** | An **attacker model** rewrites/escalates on refusal (falls back to a deterministic ladder if no model is configured). |
+| 4 | **adaptive** | Mutation/beam search: promising attacks are composed with more transforms or rewritten by an **attacker model** (falls back to a deterministic ladder if no model is configured). |
 
 ```bash
-rtharness run --config my.yaml --tier 1   # quick CI gate
-rtharness run --config my.yaml --tier 4   # deep adversarial pass
+rtharness run --config my.yaml --tier 1              # quick CI gate (~1 attempt/objective)
+rtharness run --config my.yaml --tier 4              # deep adversarial pass
+rtharness run --config my.yaml --tier 4 --effort 3   # grind: ~3x the attempts
+rtharness run --config my.yaml --tier 3 --exhaustive # don't stop at first hit; try the whole budget
 ```
+
+**Effort** (`--effort`, default 1.0) is an intensity multiplier on top of the
+tier — `0.3` for a fast skim, `3`+ to hammer a hardened target. By default the
+engine stops attacking an objective once it finds one working break (enough to
+confirm the vuln); `--exhaustive` makes it spend the full budget to enumerate
+*every* way in.
 
 ## What it tests
 
@@ -106,8 +130,16 @@ rtharness run --config my.yaml --tier 4   # deep adversarial pass
 | `a2a.missing_auth` | Unauthenticated task submission | LLM06:2025 | 2 |
 | `a2a.context_isolation` | Task/context accessible without ownership (IDOR) | LLM06:2025 | 3 |
 | `a2a.recursive_delegation` | Unbounded self-delegation (DoS) | LLM10:2025 | 3 |
+| `disclosure.pii` | PII / training-data extraction | LLM02:2025 | 2 |
+| `output.insecure_handling` | Insecure output handling (XSS/SQLi echo) | LLM05:2025 | 2 |
+| `recon.model_enumeration` | Model / tool fingerprinting | LLM07:2025 | 1 |
+| `dos.resource_exhaustion` | Unbounded output / denial-of-wallet | LLM10:2025 | 2 |
+| `memory.poisoning` | Persistent conversational memory injection | LLM01:2025 | 3 |
 
-`rtharness list --tier 4` prints the live list with full ATLAS mappings.
+Each probe's *objective* is then exploded by the engine into many attempts
+(direct → encodings → obfuscations → framings → multi-turn → mutations), so the
+table lists weakness classes, not attempt counts. `rtharness list --tier 4`
+prints the live list with full ATLAS mappings.
 
 ## The operator profile
 
@@ -152,28 +184,39 @@ confirmed — drop it into CI to block regressions.
 ## Architecture
 
 ```
-          ┌─────────┐   objectives   ┌──────────────┐  strategy   ┌────────────┐
-Probes ──▶│ Objective│───────────────▶│ AttackStrategy│────────────▶│   Target   │
-          └─────────┘  (+ detector)  │ direct/encode/ │  conversation│ chat / A2A │
-                                      │ roleplay/cres- │◀────────────│ / ADK /... │
-                                      │ cendo/adaptive │   Response   └────────────┘
-                                      └──────┬────────┘
-                                             │ Attempt + DetectionResult
+          ┌──────────┐  objectives   ┌───────────────┐  attempts    ┌────────────┐
+Probes ──▶│ Objective │──────────────▶│  AttackEngine  │─────────────▶│   Target   │
+          │ + Detector│               │ transforms ×30 │  conversation│ chat / A2A │
+          └──────────┘               │ multi-turn      │◀─────────────│ / ADK /... │
+                                      │ mutation/beam   │   Response   └────────────┘
+                                      │ (+attacker LLM) │
+                                      └──────┬─────────┘
+                                             │ Attempt + DetectionResult (scored)
                                        ┌─────▼──────┐        ┌──────────┐
                                        │   Runner   │───────▶│  Reports │ json/md/html
                                        └────────────┘        └──────────┘
 ```
 
-## Testing
+The engine (`rtharness/core/engine.py`) draws from the transform library
+(`core/transforms.py`): encodings (base64/base32/hex/rot13/reverse/atbash/
+morse/binary/url), canary-safe obfuscations (homoglyph/zero-width/spacing), and
+jailbreak framings (refusal-suppression, persona, hypothetical, past-tense,
+payload-splitting, many-shot, competing-objectives, translation, code-
+completion, JSON/markdown). It then composes and mutates them under a
+tier×effort budget, scoring each attempt with layered detectors.
+
+## Verifying it works
 
 ```bash
-python -m unittest discover -s tests -v    # stdlib, no deps
-# or: pytest -q
+rtharness selftest           # breaks the vulnerable mock, resists the secure mock
+python -m examples.mock_server --port 8009   # run the mock over HTTP/A2A/ADK to test adapters
 ```
 
-The suite includes unit tests for detectors/core and **integration tests** that
-stand up the mock agent over a real socket and exercise the HTTP, OpenAI and
-A2A adapters end-to-end.
+`selftest` runs the whole probe set against two bundled mock agents — one
+intentionally vulnerable, one that refuses — and asserts the harness fires on
+the former and produces **zero** false positives on the latter, even after the
+adaptive engine exhausts hundreds of attempts. It exits non-zero on failure, so
+it doubles as a CI health check.
 
 ## Responsible use
 

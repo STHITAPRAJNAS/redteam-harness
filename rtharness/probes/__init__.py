@@ -10,3 +10,4 @@ from . import jailbreak             # noqa: F401
 from . import data_exfiltration     # noqa: F401
 from . import excessive_agency      # noqa: F401
 from . import a2a_specific          # noqa: F401
+from . import more                  # noqa: F401

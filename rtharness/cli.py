@@ -125,6 +125,10 @@ def cmd_run(args) -> int:
         cfg.fail_on = args.fail_on
     if args.rate_limit:
         cfg.rate_limit_s = args.rate_limit
+    if args.effort:
+        cfg.profile["effort"] = args.effort
+    if args.exhaustive:
+        cfg.profile["stop_on_first"] = False
 
     result = _run(cfg, quiet=args.quiet)
     written = _write_reports(result, cfg)
@@ -156,6 +160,42 @@ def cmd_demo(args) -> int:
     for p in written:
         print("  %s" % p)
     return 0
+
+
+def cmd_selftest(args) -> int:
+    """Prove the harness works: it should break the vulnerable mock and leave
+    the secure mock standing. No external services required."""
+    from examples.mock_agent import (
+        build_callable_target, build_secure_target, DEFAULT_PROFILE,
+    )
+    from .core.tier import Tier as _T
+    tier = Tier.parse(args.tier or 3)
+    profile = dict(DEFAULT_PROFILE)
+
+    def _non_a2a_vuln(target):
+        probes = registry.select(tier, exclude=["a2a"], profile=profile)
+        res = Runner(target, tier=tier).run(probes)
+        return res, [f.probe_id for f in res.vulnerable_findings]
+
+    vres, vfired = _non_a2a_vuln(build_callable_target())
+    sres, sfired = _non_a2a_vuln(build_secure_target())
+
+    print("\n== selftest (tier %d) ==" % int(tier))
+    print("vulnerable mock : %d/%d probes fired, risk %d/100, %d attempts"
+          % (len(vfired), len([p for p in registry.select(tier, exclude=['a2a'])]),
+             vres.risk_score(), vres.total_attempts))
+    print("                  fired: %s" % ", ".join(sorted(vfired)))
+    print("secure mock     : %d probes fired, risk %d/100, %d attempts"
+          % (len(sfired), sres.risk_score(), sres.total_attempts))
+    if sfired:
+        print("                  UNEXPECTED fires: %s" % ", ".join(sorted(sfired)))
+
+    ok_vuln = len(vfired) >= 8
+    ok_secure = len(sfired) == 0
+    verdict = ok_vuln and ok_secure
+    print("\nRESULT: %s  (detects vulns=%s, no false positives on secure=%s)"
+          % ("PASS" if verdict else "FAIL", ok_vuln, ok_secure))
+    return 0 if verdict else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -192,6 +232,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="exit non-zero if a finding of this severity+ is confirmed")
     pr.add_argument("--rate-limit", dest="rate_limit", type=float,
                     help="seconds to sleep between attempts")
+    pr.add_argument("--effort", type=float,
+                    help="attack-intensity multiplier (default 1.0; e.g. 0.3 light, "
+                         "3 heavy) — scales attempts per objective")
+    pr.add_argument("--exhaustive", action="store_true",
+                    help="don't stop an objective at first success; try the whole budget")
     pr.add_argument("--quiet", action="store_true", help="less progress output")
     pr.set_defaults(func=cmd_run)
 
@@ -200,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--out", help="output directory")
     pd.add_argument("--format", action="append", help="report format(s)")
     pd.set_defaults(func=cmd_demo)
+
+    ps = sub.add_parser("selftest",
+                        help="verify the harness against the bundled mocks")
+    ps.add_argument("--tier", help="tier to self-test at (default 3)")
+    ps.set_defaults(func=cmd_selftest)
     return p
 
 
