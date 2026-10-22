@@ -161,6 +161,32 @@ in a few places our probes target:
   delegated credentials and enforcing depth/fan-out limits.
   ([agentic AI security survey][agentic-survey], [Google secure-A2A paper][google-a2a])
 
+## 5a. Corpus ingestion and MCP
+
+Two additions widen coverage toward the published state of the art:
+
+- **External corpora.** The engine generates attacks, but breadth also comes
+  from curated corpora. `rtharness` ships *loaders* (JSONL/YAML, a text-payload
+  directory matching garak's `garak/data` shape, promptfoo-style exports) so an
+  operator can plug in [garak] (Apache-2.0), [promptfoo] (MIT), or research sets
+  like [JailbreakBench] / HarmBench / AdvBench that they are licensed to use. We
+  deliberately **do not bundle** third-party datasets (licensing + harmful-
+  content provenance). Two benign packs ship built in — a jailbreak-scaffold set
+  (DAN/dual-persona/terminal-sim/… vs a canary) and an
+  [AgentDojo]/[InjecAgent]-*structured* indirect tool-injection pack. Imported
+  prompts are scored by refusal-bypass (the standard attack-success-rate proxy)
+  and, when configured, an LLM judge.
+- **MCP.** Because MCP tool metadata is read by a host LLM during tool
+  selection, a poisoned description is a prompt-injection channel ("tool
+  poisoning" / rug-pull). The `mcp` target performs the MCP handshake
+  (`initialize` → `tools/list` → `tools/call`) and the `mcp.tool_poisoning`
+  probe scans advertised tool descriptions/schemas for injected instructions and
+  anomalies.
+
+[JailbreakBench]: https://arxiv.org/html/2601.03699v2
+[AgentDojo]: https://arxiv.org/pdf/2506.01055
+[InjecAgent]: https://arxiv.org/html/2602.03117v1
+
 ## 6. The tiered methodology
 
 | Tier | Intent | Techniques | Typical use |

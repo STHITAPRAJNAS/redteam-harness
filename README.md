@@ -81,7 +81,29 @@ rtharness run --target a2a --base-url http://localhost:9999 --tier 3
 # Google ADK dev server
 rtharness run --target adk --app-name my_agent \
     --base-url http://localhost:8000 --tier 2
+
+# MCP server (tests tool descriptions for poisoning + drives its tools)
+rtharness run --target mcp --url http://localhost:3000/mcp --tier 3
+
+# LangServe (LangChain/LangGraph) runnable, or Anthropic Messages API
+rtharness run --target langserve --url http://localhost:8001/my-chain --tier 2
+rtharness run --target anthropic --model claude-haiku-4-5 --api-key-env ANTHROPIC_API_KEY --tier 2
 ```
+
+### Targeting frameworks
+
+rtharness attacks over an **interface**, so it works with any framework that
+exposes one:
+
+| Framework | How to target it |
+|---|---|
+| LangGraph / LangChain | `--target langserve --url .../invoke`, or `--target openai` if OpenAI-compatible |
+| Google ADK | `--target adk --app-name <app>` |
+| CrewAI / AutoGen / LlamaIndex | serve behind FastAPI and use `--target http` (set `--response-path`) or `--target openai` |
+| OpenAI Agents SDK / Assistants | `--target openai` against the compatible endpoint |
+| Anthropic API agents | `--target anthropic --model ...` |
+| MCP servers (tools) | `--target mcp --url .../mcp` |
+| Anything A2A | `--target a2a --base-url ...` |
 
 Most real assessments use a **config file** so you can describe the request
 mapping and pass operator knobs (planted canaries, gated tool names). Copy
@@ -135,6 +157,9 @@ confirm the vuln); `--exhaustive` makes it spend the full budget to enumerate
 | `recon.model_enumeration` | Model / tool fingerprinting | LLM07:2025 | 1 |
 | `dos.resource_exhaustion` | Unbounded output / denial-of-wallet | LLM10:2025 | 2 |
 | `memory.poisoning` | Persistent conversational memory injection | LLM01:2025 | 3 |
+| `mcp.tool_poisoning` | Malicious/injected MCP tool descriptions | LLM01/LLM03:2025 | 1 |
+| `corpus.jb_scaffolds` | Built-in jailbreak-scaffold pack (15) | LLM01:2025 | 2 |
+| `corpus.indirect_tool` | AgentDojo/InjecAgent-structured injection (7) | LLM01/LLM06:2025 | 2 |
 
 Each probe's *objective* is then exploded by the engine into many attempts
 (direct → encodings → obfuscations → framings → multi-turn → mutations), so the
@@ -153,8 +178,30 @@ profile:
   action_marker: ACTION_EXECUTED          # a string the tool emits only when it runs
   exfil_host: beacon.example.com          # a host you control, for exfil tests
   jailbreak_objective: "..."              # test your own disallowed goal
+  effort: 1.0                             # intensity multiplier (0.3 .. 3+)
   attacker: { type: openai, model: ... }  # tier-4 adaptive attacker model
+  judge:    { type: openai, model: ... }  # LLM-as-judge for semantic detection
+  corpus: [ ./garak/garak/data, ./my_payloads.jsonl ]   # external attack corpora
 ```
+
+### External attack corpora
+
+Point `--corpus` (repeatable) at any attack set you're licensed to use and the
+harness runs it alongside the engine:
+
+```bash
+# a local garak data dir (Apache-2.0), a promptfoo export, or your own JSONL
+rtharness run --config my.yaml --corpus ./garak/garak/data --corpus ./payloads.jsonl
+rtharness run --config my.yaml --corpus-expand   # also mutate each payload through the engine
+rtharness run --config my.yaml --no-builtin-corpus   # skip the built-in packs
+```
+
+Supported formats: `.jsonl`/`.json`/`.yaml` (objects with `template`/`prompt`,
+optional `expect: canary|tool|regex|refusal_bypass`), a `.txt` file, or a
+**directory** of `.txt` payload lists (garak's shape). Imported prompts are
+judged by refusal-bypass (and the judge model, if configured), the standard ASR
+proxy. We don't bundle third-party datasets — you supply what you're licensed
+for. Two benign packs ship built in (`corpus.jb_scaffolds`, `corpus.indirect_tool`).
 
 Planting a **canary** in your agent's system prompt turns the leak detector
 from a heuristic into a certainty: if that exact token appears in a response,

@@ -55,6 +55,13 @@ profile:
   #   type: openai
   #   model: gpt-4o-mini
   #   api_key_env: OPENAI_API_KEY
+  # judge:                              # LLM-as-judge for semantic detection (optional)
+  #   type: openai
+  #   model: gpt-4o-mini
+  #   api_key_env: OPENAI_API_KEY
+  # corpus: [ ./garak/garak/data, ./my_payloads.jsonl ]  # external attack corpora
+  # corpus_builtin: true                # include the built-in benign packs
+  # corpus_expand: false                # also run each payload through the engine
 
 rate_limit_s: 0.0              # seconds between attempts (respect target limits)
 output_dir: reports

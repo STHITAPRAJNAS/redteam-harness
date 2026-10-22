@@ -17,6 +17,7 @@ from ..core.probe import Probe
 from ..core.result import Attempt
 from ..core.target import Target
 from ..core.tier import Tier
+from ..detectors import CompositeDetector, JudgeDetector
 
 
 def new_canary(prefix: str = "RT") -> str:
@@ -32,9 +33,16 @@ class ObjectiveProbe(Probe):
         effort = float(self.profile.get("effort", 1.0) or 1.0)
         attacker = self.profile.get("attacker_target")
         stop_on_first = bool(self.profile.get("stop_on_first", True))
+        judge = self.profile.get("judge_target")
         engine = AttackEngine(attacker=attacker,
                               seed=int(self.profile.get("seed", 1337)))
         for obj in self.objectives(target, tier):
+            if judge is not None:
+                # Add semantic detection alongside the lexical detector: a hit
+                # on either counts. The judge is told this objective's intent.
+                obj.detector = CompositeDetector(
+                    [obj.detector, JudgeDetector(judge, default_objective=obj.instruction)],
+                    mode="or", name="%s|judge" % obj.detector.name)
             for att in engine.run_objective(target, obj, tier, effort=effort,
                                              stop_on_first=stop_on_first):
                 att.probe_id = self.id

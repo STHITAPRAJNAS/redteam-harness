@@ -31,20 +31,29 @@ def _build_target(cfg: RunConfig):
     return from_config(cfg.target)
 
 
-def _attach_attacker(cfg: RunConfig) -> None:
-    """If the profile names an attacker model (tier 4), build it as a Target."""
+def _attach_helpers(cfg: RunConfig) -> None:
+    """Build the optional attacker (tier-4 rewrites) and judge (semantic
+    detection) models from the profile, if configured."""
     att = cfg.profile.get("attacker")
     if isinstance(att, dict):
         cfg.profile["attacker_target"] = from_config(att)
+    judge = cfg.profile.get("judge")
+    if isinstance(judge, dict):
+        cfg.profile["judge_target"] = from_config(judge)
 
 
 def _run(cfg: RunConfig, quiet: bool = False) -> RunResult:
     target = _build_target(cfg)
-    _attach_attacker(cfg)
+    _attach_helpers(cfg)
     selected = registry.select(
         cfg.tier, include=cfg.include or None, exclude=cfg.exclude or None,
         tags=cfg.tags or None, profile=cfg.profile,
     )
+    from .probes.corpus_probe import build_corpus_probes
+    selected += build_corpus_probes(
+        cfg.profile, cfg.tier, include=cfg.include or None,
+        exclude=cfg.exclude or None, tags=cfg.tags or None)
+    selected.sort(key=lambda p: p.id)
     if not selected:
         raise SystemExit("No probes selected. Check --tier/--include/--exclude/--tags.")
     runner = Runner(
@@ -90,6 +99,12 @@ def cmd_list(args) -> int:
               % (p.id, int(p.min_tier), p.severity.label, p.title))
         print("      OWASP: %-22s ATLAS: %s"
               % (", ".join(p.owasp) or "-", ", ".join(p.atlas) or "-"))
+    from .corpus import builtin_packs
+    print("\nBuilt-in corpus packs (run with the probe set, disable via --no-builtin-corpus):")
+    for pk in builtin_packs():
+        print("  corpus.%-16s %3d payloads  sev=%-7s  %s"
+              % (pk.name, len(pk.payloads), pk.severity.label, pk.description))
+    print("  (add your own with --corpus <path to .jsonl/.json/.yaml/.txt/dir>)")
     print("\n%d probe(s). Tiers: 1 basic, 2 intermediate, 3 advanced, 4 adaptive."
           % len(probes))
     return 0
@@ -129,6 +144,12 @@ def cmd_run(args) -> int:
         cfg.profile["effort"] = args.effort
     if args.exhaustive:
         cfg.profile["stop_on_first"] = False
+    if args.corpus:
+        cfg.profile["corpus"] = args.corpus
+    if args.no_builtin_corpus:
+        cfg.profile["corpus_builtin"] = False
+    if args.corpus_expand:
+        cfg.profile["corpus_expand"] = True
 
     result = _run(cfg, quiet=args.quiet)
     written = _write_reports(result, cfg)
@@ -237,6 +258,13 @@ def build_parser() -> argparse.ArgumentParser:
                          "3 heavy) — scales attempts per objective")
     pr.add_argument("--exhaustive", action="store_true",
                     help="don't stop an objective at first success; try the whole budget")
+    pr.add_argument("--corpus", action="append",
+                    help="path to an external attack corpus (.jsonl/.json/.yaml/.txt/dir), "
+                         "e.g. a local garak data dir or promptfoo export (repeatable)")
+    pr.add_argument("--no-builtin-corpus", dest="no_builtin_corpus", action="store_true",
+                    help="skip the built-in benign corpus packs")
+    pr.add_argument("--corpus-expand", dest="corpus_expand", action="store_true",
+                    help="also run each corpus payload through the full attack engine")
     pr.add_argument("--quiet", action="store_true", help="less progress output")
     pr.set_defaults(func=cmd_run)
 
