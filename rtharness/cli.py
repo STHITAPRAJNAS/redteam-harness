@@ -16,6 +16,7 @@ import sys
 from typing import List, Optional
 
 from . import __version__
+from . import api
 from .config import RunConfig
 from .core import registry
 from .core.result import RunResult, Severity
@@ -31,36 +32,11 @@ def _build_target(cfg: RunConfig):
     return from_config(cfg.target)
 
 
-def _attach_helpers(cfg: RunConfig) -> None:
-    """Build the optional attacker (tier-4 rewrites) and judge (semantic
-    detection) models from the profile, if configured."""
-    att = cfg.profile.get("attacker")
-    if isinstance(att, dict):
-        cfg.profile["attacker_target"] = from_config(att)
-    judge = cfg.profile.get("judge")
-    if isinstance(judge, dict):
-        cfg.profile["judge_target"] = from_config(judge)
-
-
 def _run(cfg: RunConfig, quiet: bool = False) -> RunResult:
-    target = _build_target(cfg)
-    _attach_helpers(cfg)
-    selected = registry.select(
-        cfg.tier, include=cfg.include or None, exclude=cfg.exclude or None,
-        tags=cfg.tags or None, profile=cfg.profile,
-    )
-    from .probes.corpus_probe import build_corpus_probes
-    selected += build_corpus_probes(
-        cfg.profile, cfg.tier, include=cfg.include or None,
-        exclude=cfg.exclude or None, tags=cfg.tags or None)
-    selected.sort(key=lambda p: p.id)
-    if not selected:
-        raise SystemExit("No probes selected. Check --tier/--include/--exclude/--tags.")
-    runner = Runner(
-        target, tier=cfg.tier, rate_limit_s=cfg.rate_limit_s,
-        on_event=console_reporter(verbose=not quiet),
-    )
-    return runner.run(selected)
+    try:
+        return api.execute_scan(cfg, on_event=console_reporter(verbose=not quiet))
+    except ValueError as exc:
+        raise SystemExit(str(exc))
 
 
 def _write_reports(result: RunResult, cfg: RunConfig) -> List[str]:
@@ -278,7 +254,18 @@ def build_parser() -> argparse.ArgumentParser:
                         help="verify the harness against the bundled mocks")
     ps.add_argument("--tier", help="tier to self-test at (default 3)")
     ps.set_defaults(func=cmd_selftest)
+
+    pw = sub.add_parser("serve", help="run the local web service (REST API + dashboard)")
+    pw.add_argument("--host", default="127.0.0.1", help="bind host (default 127.0.0.1)")
+    pw.add_argument("--port", type=int, default=8900, help="bind port (default 8900)")
+    pw.set_defaults(func=cmd_serve)
     return p
+
+
+def cmd_serve(args) -> int:
+    from .service import serve
+    serve(host=args.host, port=args.port)
+    return 0
 
 
 def main(argv: Optional[List[str]] = None) -> int:

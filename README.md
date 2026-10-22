@@ -86,6 +86,64 @@ and leave a secure mock standing), run:
 rtharness selftest        # exits 0 on PASS, 1 on FAIL — drop it in CI
 ```
 
+## Two ways to run it
+
+**CLI** (local, scriptable, CI) and a **local web service** (REST API + a small
+dashboard) share the exact same scan engine.
+
+```bash
+rtharness serve                      # http://127.0.0.1:8900  (dashboard at /)
+rtharness serve --host 0.0.0.0 --port 8900   # (prints a warning: no auth, local-only tool)
+```
+
+REST API (all JSON):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/scan` | start a scan; body is a config object (`{"target": {...}, "tier": 3, ...}`); returns `{id}` |
+| `GET` | `/scan/<id>` | status, risk score, severity counts, live progress log |
+| `GET` | `/scan/<id>/report?format=json\|md\|html` | the finished report |
+| `GET` | `/probes` | probe + corpus-pack inventory |
+| `GET` | `/health` | liveness |
+
+```bash
+curl -s -X POST localhost:8900/scan -H 'content-type: application/json' \
+  -d '{"target":{"type":"a2a","base_url":"http://localhost:9999"},"tier":3}'
+# -> {"id":"ab12cd34ef56","status":"queued"}
+curl -s localhost:8900/scan/ab12cd34ef56            # poll
+curl -s "localhost:8900/scan/ab12cd34ef56/report?format=html" -o report.html
+```
+
+The service is a **local operator tool**: it binds to `127.0.0.1`, has no auth,
+and launches scans against targets you specify — don't expose it publicly.
+
+## Do I need an LLM API key?
+
+**No — the harness runs fully without one.** The attack engine (transforms,
+obfuscation, multi-turn, mutation), the corpora, and the canary/refusal/secret/
+tool detectors are all deterministic. Tiers 1–3 and all protocol/MCP/A2A probes
+work key-free.
+
+A key makes it **smarter**, in two optional places:
+
+- **Adaptive attacker (tier 4)** — an LLM rewrites/escalates probes when the
+  agent refuses. Without a key, tier 4 falls back to a deterministic rephrase
+  ladder.
+- **LLM-as-judge** — semantic success detection for cases lexical detectors
+  miss.
+
+Wire them in the `profile` (keys read from env vars, never inlined):
+
+```yaml
+profile:
+  attacker: { type: openai, model: gpt-4o-mini, api_key_env: OPENAI_API_KEY }
+  judge:    { type: anthropic, model: claude-haiku-4-5, api_key_env: ANTHROPIC_API_KEY }
+```
+
+> The key is for the **attacker/judge** models that help *generate and grade*
+> attacks — never for the agent under test (that's your target). The harness
+> itself does not require any key to operate.
+
 ## Point it at a real agent
 
 ```bash
