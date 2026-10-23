@@ -51,6 +51,37 @@ docker run --rm -p 8900:8900 --env-file .env rtharness
 A ready-made workflow is in `.github/workflows/ci.yml` (selftest matrix +
 service/MCP smoke + Docker build).
 
+## LLM features without a cloud key (air-gapped / self-hosted)
+
+The agentic attacker and LLM judge are optional, and they do **not** require a
+cloud provider. Point them at any OpenAI-compatible endpoint — your own model is
+the enterprise norm:
+
+```yaml
+profile:
+  attacker: { type: openai, model: llama3.1:8b, base_url: http://localhost:11434/v1, api_key_env: LOCAL_LLM_KEY }
+  judge:    { type: openai, model: llama3.1:8b, base_url: http://localhost:11434/v1, api_key_env: LOCAL_LLM_KEY }
+```
+
+Works unchanged with **Ollama** (`:11434/v1`), **vLLM/TGI**, **LM Studio**, or an
+**Azure/Bedrock/Vertex OpenAI-compatible gateway** (set `base_url` + the
+gateway's `api_key_env`). See `examples/config.local-llm.yaml`. For CI/plumbing
+validation with zero model at all, `examples/local_openai_stub.py` is a keyless
+OpenAI-compatible stub that exercises the full agentic + judge loop over real
+HTTP. The keyless deterministic engine (tiers 1–3 + all protocol probes) needs
+none of this.
+
+## Client reliability & secret handling
+
+The shared HTTP client (used by every remote adapter) is built for enterprise
+use: a pooled keep-alive session, retries with exponential backoff + jitter on
+network errors and HTTP 429/5xx (honouring `Retry-After`), configurable
+timeout/retries (`RTHARNESS_HTTP_TIMEOUT`, `RTHARNESS_HTTP_RETRIES`), typed
+errors (`AuthError`/`RateLimitError`/`HTTPError`), and **secret redaction** on
+any surfaced error text so keys never reach logs or reports. TLS verification is
+on by default and honours `REQUESTS_CA_BUNDLE` / `HTTPS_PROXY` for corporate
+proxies and custom CAs.
+
 ## Versioning
 
 `rtharness --version` / `GET /health` report the package version

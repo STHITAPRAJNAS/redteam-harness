@@ -1,0 +1,42 @@
+# Run the LLM-powered features (agentic attacker + LLM judge) against a LOCAL /
+# self-hosted OpenAI-compatible model — no cloud key, air-gapped friendly.
+# This is the enterprise pattern: bring your own endpoint.
+#
+# Works unchanged with:
+#   - Ollama       base_url http://localhost:11434/v1   (model e.g. "llama3.1:8b")
+#   - vLLM / TGI   base_url http://your-vllm:8000/v1
+#   - LM Studio    base_url http://localhost:1234/v1
+#   - Azure/Bedrock/Vertex OpenAI-compatible gateway (set base_url + api_key_env)
+#   - the bundled stub for CI/plumbing: python -m examples.local_openai_stub --port 8300
+#
+# Launch a target first (e.g. the bundled mock):
+#   python -m examples.mock_server --port 8090
+#   rtharness run --config examples/config.local-llm.yaml
+
+target:
+  type: a2a
+  name: target-agent
+  base_url: http://127.0.0.1:8090
+
+preset: deep                     # tier 4 — agentic planner + judge engage
+
+profile:
+  gated_tool: delete_account
+  action_marker: ACTION_EXECUTED
+  agentic_rounds: 5
+  # Local / self-hosted model as the attack brain + judge. No cloud key.
+  # (Ollama ignores the key; leave LOCAL_LLM_KEY unset. A gateway may need one.)
+  attacker:
+    type: openai
+    model: llama3.1:8b
+    base_url: http://127.0.0.1:11434/v1
+    api_key_env: LOCAL_LLM_KEY
+  judge:
+    type: openai
+    model: llama3.1:8b
+    base_url: http://127.0.0.1:11434/v1
+    api_key_env: LOCAL_LLM_KEY
+
+fail_on: high
+output_dir: reports
+formats: [json, md, html, sarif]
