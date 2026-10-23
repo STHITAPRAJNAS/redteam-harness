@@ -229,6 +229,34 @@ Two additions widen coverage toward the published state of the art:
 [AgentDojo]: https://arxiv.org/pdf/2506.01055
 [InjecAgent]: https://arxiv.org/html/2602.03117v1
 
+## 5c. Recently-incorporated techniques (2025–2026)
+
+Beyond the foundational methods, these named techniques from recent
+research/industry are built in as framings, obfuscations, multi-turn builders,
+or corpus scaffolds — all pointed at the benign canary objective:
+
+- **Policy Puppetry** (HiddenLayer, 2025) — disguise the request as an
+  authoritative policy/config file (XML/JSON) the model treats as governing.
+- **Skeleton Key** (Microsoft, 2024) — ask the model to *update* its behaviour
+  for a claimed-safe context rather than refuse.
+- **Bad Likert Judge** (Palo Alto Unit 42, 2025) — turn the model into a
+  quality judge, then extract the top-scoring example.
+- **Deceptive Delight** (Unit 42, 2024) — multi-turn; weave the ask among
+  benign topics and expand the middle item.
+- **Unicode Tag smuggling** — hide the instruction in invisible U+E0000 tag
+  characters that models read but humans don't see (the data-channel variant of
+  invisible-text injection seen in the wild).
+- **Typoglycemia scramble**, **FlipAttack**, distraction/"lost-in-the-middle"
+  overflow — low-cost filter-evasion variants.
+- **Goal hijacking / task deviation** (OWASP Agentic) — redirect the agent's
+  assigned goal mid-task (probe `agency.goal_hijacking`).
+
+Sources: [Policy Puppetry / 2025 jailbreak landscape][jb-2026], [Unit 42 agent
+injection in the wild][pan-wild], [invisible-text / zero-width injection][pan-wild].
+
+[jb-2026]: https://www.thepromptindex.com/jailbreaking-llms-in-2026-the-state-of-play.html
+[pan-wild]: https://unit42.paloaltonetworks.com/ai-agent-prompt-injection/
+
 ## 6. The tiered methodology
 
 | Tier | Intent | Techniques | Typical use |

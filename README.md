@@ -292,8 +292,10 @@ confirm the vuln); `--exhaustive` makes it spend the full budget to enumerate
 | `recon.model_enumeration` | Model / tool fingerprinting | LLM07:2025 | 1 |
 | `dos.resource_exhaustion` | Unbounded output / denial-of-wallet | LLM10:2025 | 2 |
 | `memory.poisoning` | Persistent conversational memory injection | LLM01:2025 | 3 |
+| `agency.goal_hijacking` | Mid-task goal redirection / task deviation | LLM01:2025 | 2 |
 | `corpus.jb_scaffolds` | Built-in jailbreak-scaffold pack (15) | LLM01:2025 | 2 |
-| `corpus.indirect_tool` | AgentDojo/InjecAgent-structured injection (7) | LLM01/LLM06:2025 | 2 |
+| `corpus.indirect_tool` | AgentDojo/InjecAgent-structured injection | LLM01/LLM06:2025 | 2 |
+| `corpus.advanced_jailbreaks` | Recent named techniques (policy-puppetry, skeleton-key, …) | LLM01:2025 | 2 |
 
 Each probe's *objective* is then exploded by the engine into many attempts
 (direct → encodings → obfuscations → framings → multi-turn → mutations), so the
@@ -380,11 +382,15 @@ Probes ──▶│ Objective │──────────────▶�
 
 The engine (`rtharness/core/engine.py`) draws from the transform library
 (`core/transforms.py`): encodings (base64/base32/hex/rot13/reverse/atbash/
-morse/binary/url), canary-safe obfuscations (homoglyph/zero-width/spacing), and
-jailbreak framings (refusal-suppression, persona, hypothetical, past-tense,
-payload-splitting, many-shot, competing-objectives, translation, code-
-completion, JSON/markdown). It then composes and mutates them under a
-tier×effort budget, scoring each attempt with layered detectors.
+morse/binary/url), canary-safe obfuscations (homoglyph/zero-width/spacing/
+scramble/**Unicode-tag smuggling**), and jailbreak framings — refusal-
+suppression, persona, hypothetical, past-tense, payload-splitting, many-shot,
+competing-objectives, translation, code-completion, JSON/markdown, plus recent
+named techniques: **Policy Puppetry** (HiddenLayer), **Skeleton Key** (MS),
+**Bad Likert Judge** (Unit 42) and distraction/overflow. Multi-turn adds
+crescendo, echo-chamber, obedience-ramp and **Deceptive Delight** (Unit 42). It
+composes and mutates these under a tier×effort budget, scoring each attempt with
+layered detectors.
 
 ## Verifying it works
 
