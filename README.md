@@ -163,7 +163,9 @@ agent = LlmAgent(model="gemini-2.0-flash", name="security_reviewer",
 **No — the harness runs fully without one.** The attack engine (transforms,
 obfuscation, multi-turn, mutation), the corpora, and the canary/refusal/secret/
 tool detectors are all deterministic. Tiers 1–3 and all protocol/MCP/A2A probes
-work key-free.
+work key-free. To turn the optional LLM features on, see
+**[docs/RUNNING_LIVE_LLM.md](docs/RUNNING_LIVE_LLM.md)** (cloud, self-hosted, or
+air-gapped).
 
 A key makes it **smarter**, in three optional places:
 
