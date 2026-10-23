@@ -49,6 +49,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"status": "ok", "version": __version__, "jobs": len(sc.JOBS)})
         elif path == "/probes":
             self._json(200, sc.probe_inventory())
+        elif path == "/presets":
+            from . import presets as _p
+            self._json(200, {"presets": [{"name": n, "description": _p.describe(n)}
+                                          for n in _p.names()]})
         elif path.startswith("/scan/"):
             parts = path.split("/")
             job = sc.JOBS.get(parts[2]) if len(parts) > 2 else None

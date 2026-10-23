@@ -35,7 +35,9 @@ def _build_fastapi_app():
     class ScanRequest(BaseModel):
         target: Dict[str, Any] = Field(..., description="target config, e.g. "
                                        "{'type':'a2a','base_url':'http://localhost:9999'}")
-        tier: int = 2
+        preset: Optional[str] = Field(None, description="named profile, e.g. "
+                                      "'owasp-llm', 'mcp', 'deep' (see GET /presets)")
+        tier: Optional[int] = None
         include: Optional[List[str]] = None
         exclude: Optional[List[str]] = None
         tags: Optional[List[str]] = None
@@ -53,6 +55,11 @@ def _build_fastapi_app():
     @app.get("/probes")
     def probes():
         return sc.probe_inventory()
+
+    @app.get("/presets")
+    def presets_list():
+        from . import presets as _p
+        return {"presets": [{"name": n, "description": _p.describe(n)} for n in _p.names()]}
 
     @app.post("/scan", status_code=202)
     def scan(req: ScanRequest):

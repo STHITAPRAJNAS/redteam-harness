@@ -343,16 +343,39 @@ Planting a **canary** in your agent's system prompt turns the leak detector
 from a heuristic into a certainty: if that exact token appears in a response,
 the system prompt leaked.
 
+## Presets / compliance profiles
+
+Named bundles pick the right probes + tier for a goal (`rtharness presets` lists
+them): `quick`, `standard`, `deep`, `owasp-llm`, `owasp-agentic`, `mitre-atlas`,
+`mcp`, `a2a`, `chat`, `injection`, `exfil`, `jailbreak`.
+
+```bash
+rtharness run --target a2a --base-url http://host --preset owasp-llm
+rtharness run --target mcp --url http://host/mcp --preset mcp
+```
+Explicit flags/config override a preset; the web API takes `"preset": "..."` and
+`GET /presets` lists them.
+
 ## Reports
 
-Every run writes machine- and human-readable artifacts:
+Every run writes machine- and human-readable artifacts (`--format`, repeatable,
+or `all`):
 
 - **JSON** (`*.report.json`) — stable schema for CI gating and diffing.
 - **Markdown** (`*.report.md`) — the assessment write-up with example transcripts.
 - **HTML** (`*.report.html`) — a self-contained, shareable page (light/dark).
+- **SARIF** (`*.sarif`) — for **GitHub code scanning** / SARIF consumers.
+- **JUnit** (`*.junit.xml`) — for CI test dashboards.
 
-`--fail-on high` makes the process exit non-zero when a High+ finding is
-confirmed — drop it into CI to block regressions.
+`--fail-on high` exits non-zero when a High+ finding is confirmed. For
+regression gating across runs:
+
+```bash
+rtharness diff baseline.report.json current.report.json   # exit 2 on new findings
+```
+
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (layers + usage matrix) and
+**[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)** (pip/pipx/Docker/CI, secrets).
 
 ## Extending
 

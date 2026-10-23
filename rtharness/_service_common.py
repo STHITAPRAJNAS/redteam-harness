@@ -14,7 +14,7 @@ from .config import RunConfig
 from .core import registry
 from .core.tier import Tier
 from .corpus import builtin_packs
-from .report import to_json, to_markdown, to_html
+from .report import to_json, to_markdown, to_html, to_sarif, to_junit
 
 
 class Job:
@@ -84,6 +84,10 @@ def render_report(job: Job, fmt: str) -> tuple:
         return to_markdown(job.result), "text/markdown; charset=utf-8"
     if fmt == "html":
         return to_html(job.result), "text/html; charset=utf-8"
+    if fmt == "sarif":
+        return to_sarif(job.result), "application/json"
+    if fmt == "junit":
+        return to_junit(job.result), "application/xml; charset=utf-8"
     return to_json(job.result), "application/json"
 
 
