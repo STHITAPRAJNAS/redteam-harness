@@ -127,6 +127,7 @@ def cmd_run(args) -> int:
     if args.corpus_expand:
         cfg.profile["corpus_expand"] = True
 
+    print("[*] %s" % api.capability_line(cfg), file=sys.stderr)
     result = _run(cfg, quiet=args.quiet)
     written = _write_reports(result, cfg)
     print("\nReports written:")

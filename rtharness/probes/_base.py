@@ -34,8 +34,11 @@ class ObjectiveProbe(Probe):
         attacker = self.profile.get("attacker_target")
         stop_on_first = bool(self.profile.get("stop_on_first", True))
         judge = self.profile.get("judge_target")
-        engine = AttackEngine(attacker=attacker,
-                              seed=int(self.profile.get("seed", 1337)))
+        engine = AttackEngine(
+            attacker=attacker,
+            seed=int(self.profile.get("seed", 1337)),
+            agentic=self.profile.get("agentic"),
+            agentic_rounds=int(self.profile.get("agentic_rounds", 6)))
         for obj in self.objectives(target, tier):
             if judge is not None:
                 # Add semantic detection alongside the lexical detector: a hit

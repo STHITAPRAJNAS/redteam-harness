@@ -44,6 +44,29 @@ def select_probes(cfg: RunConfig) -> List[Probe]:
     return selected
 
 
+def capabilities(cfg: RunConfig) -> dict:
+    """Which LLM-powered enhancements this config will use. Everything else runs
+    on the deterministic engine regardless."""
+    p = cfg.profile or {}
+    has_attacker = bool(p.get("attacker") or p.get("attacker_target"))
+    has_judge = bool(p.get("judge") or p.get("judge_target"))
+    agentic = p.get("agentic")
+    agentic = has_attacker if agentic is None else bool(agentic)
+    return {"attacker": has_attacker, "judge": has_judge,
+            "agentic": agentic and has_attacker,
+            "deterministic_engine": True}
+
+
+def capability_line(cfg: RunConfig) -> str:
+    c = capabilities(cfg)
+    def onoff(k, label):
+        return "%s: %s" % (label, "on" if c[k] else "off")
+    tail = "" if c["judge"] else "  (no judge -> mechanical detection only)"
+    return "modes -> deterministic engine: on, %s, %s, %s%s" % (
+        onoff("attacker", "adaptive attacker"), onoff("agentic", "agentic planner"),
+        onoff("judge", "LLM judge"), tail)
+
+
 def execute_scan(cfg: RunConfig,
                  on_event: Optional[Callable[[str, dict], None]] = None) -> RunResult:
     target = from_config(cfg.target)

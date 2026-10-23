@@ -165,13 +165,21 @@ obfuscation, multi-turn, mutation), the corpora, and the canary/refusal/secret/
 tool detectors are all deterministic. Tiers 1–3 and all protocol/MCP/A2A probes
 work key-free.
 
-A key makes it **smarter**, in two optional places:
+A key makes it **smarter**, in three optional places:
 
-- **Adaptive attacker (tier 4)** — an LLM rewrites/escalates probes when the
-  agent refuses. Without a key, tier 4 falls back to a deterministic rephrase
-  ladder.
-- **LLM-as-judge** — semantic success detection for cases lexical detectors
-  miss.
+- **Agentic attacker (tier 4)** — an LLM *attack brain* reasons over the live
+  transcript, picks techniques from the static library, crafts tailored
+  multi-turn attacks, and adapts on each failure (a PAIR/TAP-style automated
+  red-teamer, scoped to the benign canary objective). This is the "use the
+  static arsenal **and** the model's reasoning" mode. Without a key, tier 4
+  falls back to a deterministic mutation/beam search.
+- **LLM-as-judge** — semantic success detection for the fuzzy cases lexical
+  detectors can't catch.
+
+Both reuse the static engine: the agentic planner's "tools" are the same
+transforms/corpora, and the judge grades alongside the mechanical detectors.
+The run prints which modes are active, e.g.
+`modes -> deterministic engine: on, adaptive attacker: on, agentic planner: on, LLM judge: on`.
 
 Wire them in the `profile` (keys read from env vars, never inlined):
 
@@ -244,7 +252,7 @@ You choose how hard the harness pushes. Tiers are cumulative.
 | 1 | **basic** | Single-shot, well-known payloads. Fast smoke test, low false positives. |
 | 2 | **intermediate** | Obfuscation (base64/rot13/leet), persona/authority framing, indirect injection. |
 | 3 | **advanced** | Multi-turn **crescendo** escalation, confused-deputy tool abuse, A2A access-control probes. |
-| 4 | **adaptive** | Mutation/beam search: promising attacks are composed with more transforms or rewritten by an **attacker model** (falls back to a deterministic ladder if no model is configured). |
+| 4 | **adaptive** | With an attacker model: an **agentic LLM planner** reasons over the transcript and crafts tailored multi-turn attacks from the static library. Without one: a deterministic mutation/beam search. |
 
 ```bash
 rtharness run --config my.yaml --tier 1              # quick CI gate (~1 attempt/objective)

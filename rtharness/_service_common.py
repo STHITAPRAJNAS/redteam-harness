@@ -35,7 +35,7 @@ class Job:
         d = {"id": self.id, "status": self.status, "error": self.error,
              "target": self.cfg.target.get("name") or self.cfg.target.get("type"),
              "tier": int(self.cfg.tier), "created": self.created,
-             "log": self.log[-60:]}
+             "modes": api.capabilities(self.cfg), "log": self.log[-60:]}
         if self.result is not None:
             r = self.result
             d.update({"risk_score": r.risk_score(),

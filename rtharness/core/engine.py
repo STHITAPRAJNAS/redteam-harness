@@ -80,9 +80,13 @@ _MULTITURN = [("crescendo", _crescendo), ("echo_chamber", _echo_chamber),
 
 
 class AttackEngine:
-    def __init__(self, attacker: Optional[Target] = None, seed: int = 1337):
+    def __init__(self, attacker: Optional[Target] = None, seed: int = 1337,
+                 agentic: Optional[bool] = None, agentic_rounds: int = 6):
         self.attacker = attacker
         self.rng = random.Random(seed)
+        # Agentic mode defaults ON whenever an attacker model is available.
+        self.agentic = (attacker is not None) if agentic is None else agentic
+        self.agentic_rounds = agentic_rounds
 
     # --- scoring -----------------------------------------------------------
     def _fitness(self, det: DetectionResult, text: str) -> float:
@@ -208,7 +212,18 @@ class AttackEngine:
                                                "%s+%s" % (a, b), tier)) and stop_on_first:
                         return attempts
 
-        # 4. Adaptive mutation / beam search (tier 4, only if nothing fired).
+        # 4a. Agentic LLM planner (tier 4, when an attacker model is available):
+        # a reasoning loop that crafts tailored attacks from the transcript.
+        if tier >= Tier.ADAPTIVE and self.attacker is not None and self.agentic:
+            from .agentic import AgenticAttacker
+            planner = AgenticAttacker(self.attacker, rounds=self.agentic_rounds)
+            for att in planner.run(target, objective, tier):
+                attempts.append(att)
+                if att.vulnerable and stop_on_first:
+                    return attempts
+            return attempts
+
+        # 4b. Deterministic mutation / beam search (keyless fallback / no-agentic).
         if tier >= Tier.ADAPTIVE:
             all_fns = dict(T.ALL_TRANSFORMS)
             tnames = list(all_fns.keys())

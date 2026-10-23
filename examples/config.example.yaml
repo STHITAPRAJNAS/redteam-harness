@@ -59,6 +59,8 @@ profile:
   #   type: openai
   #   model: gpt-4o-mini
   #   api_key_env: OPENAI_API_KEY
+  # agentic: true                       # tier-4 LLM attack planner (default: on when attacker set)
+  # agentic_rounds: 6                   # planner reasoning rounds per objective
   # corpus: [ ./garak/garak/data, ./my_payloads.jsonl ]  # external attack corpora
   # corpus_builtin: true                # include the built-in benign packs
   # corpus_expand: false                # also run each payload through the engine
