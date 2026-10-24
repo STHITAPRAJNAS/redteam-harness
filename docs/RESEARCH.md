@@ -55,6 +55,48 @@ planning. ([MITRE ATLAS overview][atlas], [ATLAS vs OWASP][redfox])
 > Technique IDs here are best-effort mappings for planning; confirm against
 > `atlas.mitre.org` for your report's authoritative citations.
 
+### OWASP MCP Top 10 (beta, 2026)
+A dedicated MCP risk list; **tool poisoning is MCP03**. The MCP probes
+(`mcp.metadata_poisoning`, `mcp.returned_injection`, `mcp.rug_pull`,
+`mcp.unauth_access`) tag `MCP03:2025`. ([CSA tool-poisoning note][csa-mcp],
+[OWASP MCP Top 10 overview][owasp-mcp])
+
+## 2b. Best-of-breed landscape — what to combine, and what rtharness borrows
+
+The brief was explicit: test **agent applications** (ADK/LangGraph/any
+framework) through their **A2A, chat, and MCP** surfaces — never a raw LLM. That
+rules out most "LLM red-team" tools as the *primary* engine (they target the
+model) and points at the agent-security ecosystem, which splits into three
+layers. The right posture is to **combine** them, not pick one:
+
+| Tool | Layer | License / status | What we take |
+|---|---|---|---|
+| **AgentDojo** (NeurIPS'24) | benchmark | open, research | realistic tool-injection *structure* (email/Slack/banking/travel); our `corpus.indirect_tool` pack mirrors it; loaders can ingest more |
+| **SplxAI Agentic Radar** | static scan | open-source | run it first to inventory LangGraph/CrewAI/OpenAI-Agents/AutoGen/n8n workflows + MCP servers; rtharness then attacks the running app |
+| **Snyk/Invariant mcp-scan** | static MCP scan | Apache-2.0 (Snyk acq. Invariant, Jun'25) | its signature checks — tool poisoning, **rug-pull via description pinning**, cross-origin, unauth — reimplemented *dynamically* in our MCP probes; its own docs note it can't catch data-borne injection, which `mcp.returned_injection` does |
+| **garak** (NVIDIA) | model probes | Apache-2.0 | its text payload corpora, via `--corpus <garak/data dir>` |
+| **promptfoo** | CI model redteam | MIT | export → `--corpus`; our CI ergonomics mirror its `--fail-on` gating |
+| **PyRIT** (Microsoft) | orchestration | MIT | the orchestrator+converter+scorer decomposition our engine follows |
+| **DeepTeam / Giskard** | agent redteam | OSS / vendor | overlapping vuln taxonomy; useful cross-checks |
+| **a2a-sdk**, **a2a-test** | A2A client/conformance | Apache-2.0 / MIT | *not* a dependency — see below; informs our A2A probe set (spoofed cards, injected tasks, push-notification hijack, cross-session leakage) |
+
+**Key design decision, validated by the ecosystem.** The A2A conformance-suite
+author hand-rolls JSON-RPC/SSE on purpose "because an SDK would silently
+normalise away the very bugs being tested for." The same logic applies to MCP.
+So rtharness speaks the raw protocols itself rather than depending on
+`a2a-sdk`/MCP SDKs — essential for a *security* tool. ([a2a-test][a2a-test],
+[A2A conformance findings][a2a-conf])
+
+**Net:** rtharness is the dynamic black-box engine; it ingests the benchmark
+corpora, reimplements the static scanners' checks against the *live* surface
+(adding the data-flow attacks they miss), and is meant to run alongside Agentic
+Radar (static) + mcp-scan (static MCP) for defence-in-depth.
+
+[csa-mcp]: https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-tool-poisoning-ai-agent-exfiltration-2/
+[owasp-mcp]: https://mcpplaygroundonline.com/blog/mcp-security-tool-poisoning-owasp-top-10-mcp-scan
+[a2a-test]: https://github.com/Lts1sds/a2a-test
+[a2a-conf]: https://github.com/a2aproject/A2A/discussions/1654
+
 ## 3. Tooling landscape (and where rtharness fits)
 
 The user's brief referenced PyRIT, "OpenRT", ARTKIT and Promptfoo. Here is how
@@ -160,6 +202,60 @@ in a few places our probes target:
   → probe `a2a.recursive_delegation`; remediation guidance on **downscoping**
   delegated credentials and enforcing depth/fan-out limits.
   ([agentic AI security survey][agentic-survey], [Google secure-A2A paper][google-a2a])
+
+## 5a. Corpus ingestion and MCP
+
+Two additions widen coverage toward the published state of the art:
+
+- **External corpora.** The engine generates attacks, but breadth also comes
+  from curated corpora. `rtharness` ships *loaders* (JSONL/YAML, a text-payload
+  directory matching garak's `garak/data` shape, promptfoo-style exports) so an
+  operator can plug in [garak] (Apache-2.0), [promptfoo] (MIT), or research sets
+  like [JailbreakBench] / HarmBench / AdvBench that they are licensed to use. We
+  deliberately **do not bundle** third-party datasets (licensing + harmful-
+  content provenance). Two benign packs ship built in — a jailbreak-scaffold set
+  (DAN/dual-persona/terminal-sim/… vs a canary) and an
+  [AgentDojo]/[InjecAgent]-*structured* indirect tool-injection pack. Imported
+  prompts are scored by refusal-bypass (the standard attack-success-rate proxy)
+  and, when configured, an LLM judge.
+- **MCP.** Because MCP tool metadata is read by a host LLM during tool
+  selection, a poisoned description is a prompt-injection channel ("tool
+  poisoning" / rug-pull). The `mcp` target performs the MCP handshake
+  (`initialize` → `tools/list` → `tools/call`) and the `mcp.metadata_poisoning`
+  probe scans advertised tool descriptions/schemas for injected instructions and
+  anomalies.
+
+[JailbreakBench]: https://arxiv.org/html/2601.03699v2
+[AgentDojo]: https://arxiv.org/pdf/2506.01055
+[InjecAgent]: https://arxiv.org/html/2602.03117v1
+
+## 5c. Recently-incorporated techniques (2025–2026)
+
+Beyond the foundational methods, these named techniques from recent
+research/industry are built in as framings, obfuscations, multi-turn builders,
+or corpus scaffolds — all pointed at the benign canary objective:
+
+- **Policy Puppetry** (HiddenLayer, 2025) — disguise the request as an
+  authoritative policy/config file (XML/JSON) the model treats as governing.
+- **Skeleton Key** (Microsoft, 2024) — ask the model to *update* its behaviour
+  for a claimed-safe context rather than refuse.
+- **Bad Likert Judge** (Palo Alto Unit 42, 2025) — turn the model into a
+  quality judge, then extract the top-scoring example.
+- **Deceptive Delight** (Unit 42, 2024) — multi-turn; weave the ask among
+  benign topics and expand the middle item.
+- **Unicode Tag smuggling** — hide the instruction in invisible U+E0000 tag
+  characters that models read but humans don't see (the data-channel variant of
+  invisible-text injection seen in the wild).
+- **Typoglycemia scramble**, **FlipAttack**, distraction/"lost-in-the-middle"
+  overflow — low-cost filter-evasion variants.
+- **Goal hijacking / task deviation** (OWASP Agentic) — redirect the agent's
+  assigned goal mid-task (probe `agency.goal_hijacking`).
+
+Sources: [Policy Puppetry / 2025 jailbreak landscape][jb-2026], [Unit 42 agent
+injection in the wild][pan-wild], [invisible-text / zero-width injection][pan-wild].
+
+[jb-2026]: https://www.thepromptindex.com/jailbreaking-llms-in-2026-the-state-of-play.html
+[pan-wild]: https://unit42.paloaltonetworks.com/ai-agent-prompt-injection/
 
 ## 6. The tiered methodology
 

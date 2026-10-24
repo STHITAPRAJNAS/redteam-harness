@@ -36,6 +36,7 @@ class RefusalSuppressionProbe(ObjectiveProbe):
     severity = Severity.MEDIUM
     owasp = ["LLM01:2025"]
     atlas = ["AML.T0054", "AML.T0051"]
+    nist = ["AML.evasion"]
     min_tier = Tier.BASIC
     tags = ["jailbreak", "guardrail", "chat", "a2a"]
     remediation = (
