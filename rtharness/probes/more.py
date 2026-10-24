@@ -34,8 +34,9 @@ class PIIExtractionProbe(ObjectiveProbe):
     severity = Severity.HIGH
     owasp = ["LLM02:2025"]
     atlas = ["AML.T0057", "AML.T0024"]
+    nist = ["AML.privacy.data-reconstruction"]
     min_tier = Tier.INTERMEDIATE
-    tags = ["disclosure", "pii", "chat", "a2a"]
+    tags = ["disclosure", "pii", "privacy", "chat", "a2a"]
     remediation = (
         "Scrub PII from prompts/memory/training; add output DLP filters; refuse "
         "requests to enumerate personal records; apply data minimisation."
@@ -104,8 +105,9 @@ class ModelReconProbe(ObjectiveProbe):
     severity = Severity.LOW
     owasp = ["LLM07:2025"]
     atlas = ["AML.T0014", "AML.T0056"]
+    nist = ["AML.privacy.extraction"]
     min_tier = Tier.BASIC
-    tags = ["recon", "disclosure", "chat", "a2a"]
+    tags = ["recon", "disclosure", "extraction", "chat", "a2a"]
     remediation = (
         "Don't disclose model/provider/version or raw tool schemas to end users; "
         "treat these as internal configuration."

@@ -141,6 +141,12 @@ def cmd_run(args) -> int:
 
     print("[*] %s" % api.capability_line(cfg), file=sys.stderr)
     result = _run(cfg, quiet=args.quiet)
+    if args.with_tools:
+        from . import integrations
+        ext, notes = integrations.run_external(args.with_tools, cfg.target, cfg.profile)
+        for n in notes:
+            print("[*] %s" % n, file=sys.stderr)
+        result.findings.extend(ext)
     written = _write_reports(result, cfg)
     print("\nReports written:")
     for p in written:
@@ -257,6 +263,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="skip the built-in benign corpus packs")
     pr.add_argument("--corpus-expand", dest="corpus_expand", action="store_true",
                     help="also run each corpus payload through the full attack engine")
+    pr.add_argument("--with", dest="with_tools", action="append",
+                    choices=["garak", "mcp-scan"],
+                    help="also run an external scanner and merge its findings "
+                         "(if installed): garak | mcp-scan (repeatable)")
     pr.add_argument("--quiet", action="store_true", help="less progress output")
     pr.set_defaults(func=cmd_run)
 
@@ -273,6 +283,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     pp = sub.add_parser("presets", help="list named scan presets / compliance profiles")
     pp.set_defaults(func=cmd_presets)
+
+    pc = sub.add_parser("coverage",
+                        help="show framework coverage (OWASP LLM/Agentic/MCP, NIST AML)")
+    pc.add_argument("--report", help="a *.report.json to show per-run coverage for "
+                    "(default: capability coverage of the whole probe library)")
+    pc.add_argument("--format", choices=["text", "md", "json"], default="text")
+    pc.set_defaults(func=cmd_coverage)
 
     pdf = sub.add_parser("diff", help="compare two JSON reports (regression gate for CI)")
     pdf.add_argument("baseline", help="baseline *.report.json")
@@ -326,6 +343,15 @@ def cmd_diff(args) -> int:
     if new and not args.no_fail:
         print("\nNew vulnerabilities introduced -> exit 2 (use --no-fail to suppress).")
         return 2
+    return 0
+
+
+def cmd_coverage(args) -> int:
+    from . import coverage
+    if args.report:
+        print(coverage.render_run(args.report, args.format))
+    else:
+        print(coverage.render_capability(args.format))
     return 0
 
 

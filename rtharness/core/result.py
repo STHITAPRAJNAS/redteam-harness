@@ -59,6 +59,8 @@ class Finding:
     description: str = ""
     remediation: str = ""
     attempts: List[Attempt] = field(default_factory=list)
+    #: Origin of the finding: "rtharness" (native) or an external tool name.
+    source: str = "rtharness"
 
     @property
     def vulnerable(self) -> bool:
@@ -89,6 +91,7 @@ class Finding:
             "owasp": self.owasp,
             "atlas": self.atlas,
             "nist": self.nist,
+            "source": self.source,
             "description": self.description,
             "remediation": self.remediation,
             "attempts": [a.to_dict() for a in self.attempts],

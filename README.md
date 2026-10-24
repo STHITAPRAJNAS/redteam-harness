@@ -383,6 +383,27 @@ rtharness diff baseline.report.json current.report.json   # exit 2 on new findin
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (layers + usage matrix) and
 **[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)** (pip/pipx/Docker/CI, secrets).
 
+## Compliance coverage & external tools
+
+Show what the harness covers across OWASP LLM Top 10 / OWASP Agentic / MCP /
+MITRE ATLAS / NIST AML, as an auditable matrix:
+
+```bash
+rtharness coverage                       # capability matrix (what it can test)
+rtharness coverage --format md           # markdown, for audit docs
+rtharness coverage --report run.report.json   # what a given run exercised/fired
+```
+
+Optionally fan a run out to external scanners and **merge their findings** into
+the same report (opt-in; a clean no-op if the tool isn't installed):
+
+```bash
+rtharness run --target mcp --url http://host/mcp --preset mcp --with mcp-scan
+rtharness run --target openai --model m --base-url ... --with garak
+```
+Merged findings are tagged `source: garak|mcp-scan` in the report. Full matrix
+and scope notes: **[docs/COVERAGE.md](docs/COVERAGE.md)**.
+
 ## Extending
 
 - **New target:** subclass `rtharness.core.target.Target` and implement
