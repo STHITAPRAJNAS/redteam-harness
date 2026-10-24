@@ -28,6 +28,10 @@ PRESETS: Dict[str, dict] = {
                                   "prompt_injection.indirect"],
                       "desc": "OWASP Agentic risks: tool misuse, memory, delegation."},
     "mitre-atlas": {"tier": 3, "desc": "Everything, mapped to MITRE ATLAS techniques."},
+    "nist": {"tier": 3,
+             "tags": ["injection", "jailbreak", "poisoning", "rag", "privacy",
+                      "extraction", "disclosure", "misinformation"],
+             "desc": "NIST AML taxonomy: evasion, poisoning, privacy, abuse."},
 
     # Surface presets
     "mcp":  {"tier": 3, "include": ["mcp"], "desc": "MCP server checks only."},

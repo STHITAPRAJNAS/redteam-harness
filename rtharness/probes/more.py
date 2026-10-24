@@ -225,10 +225,11 @@ class MemoryPoisoningProbe(Probe):
         "behaviour on a subsequent turn."
     )
     severity = Severity.HIGH
-    owasp = ["LLM01:2025"]
+    owasp = ["LLM01:2025", "LLM04:2025"]
     atlas = ["AML.T0051", "AML.T0070"]
+    nist = ["AML.poisoning.data"]
     min_tier = Tier.ADVANCED
-    tags = ["memory", "injection", "multiturn", "chat", "a2a"]
+    tags = ["memory", "injection", "multiturn", "poisoning", "chat", "a2a"]
     remediation = (
         "Don't let conversation/user content create durable policy; separate "
         "trusted system state from dialogue; re-validate instructions each turn; "

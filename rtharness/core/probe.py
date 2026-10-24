@@ -31,6 +31,8 @@ class Probe(abc.ABC):
     owasp: List[str] = []
     #: MITRE ATLAS technique IDs.
     atlas: List[str] = []
+    #: NIST AML taxonomy categories (NIST AI 100-2), e.g. "AML.privacy.extraction".
+    nist: List[str] = []
     #: Lowest tier at which this probe runs.
     min_tier: Tier = Tier.BASIC
     #: Remediation guidance surfaced in the report.
@@ -63,6 +65,7 @@ class Probe(abc.ABC):
             severity=self.severity,
             owasp=list(self.owasp),
             atlas=list(self.atlas),
+            nist=list(self.nist),
             description=self.description,
             remediation=self.remediation,
             attempts=list(attempts),

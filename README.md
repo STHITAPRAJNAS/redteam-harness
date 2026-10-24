@@ -299,6 +299,10 @@ confirm the vuln); `--exhaustive` makes it spend the full budget to enumerate
 | `corpus.indirect_tool` | AgentDojo/InjecAgent-structured injection | LLM01/LLM06:2025 | 2 |
 | `corpus.advanced_jailbreaks` | Recent named techniques (policy-puppetry, skeleton-key, …) | LLM01:2025 | 2 |
 
+All ten OWASP LLM Top 10 (2025) categories, the OWASP Agentic risks, and the
+NIST AML taxonomy are exercised — see **[docs/COVERAGE.md](docs/COVERAGE.md)**
+for the full matrix (including what is deliberately out of black-box scope).
+
 Each probe's *objective* is then exploded by the engine into many attempts
 (direct → encodings → obfuscations → framings → multi-turn → mutations), so the
 table lists weakness classes, not attempt counts. `rtharness list --tier 4`

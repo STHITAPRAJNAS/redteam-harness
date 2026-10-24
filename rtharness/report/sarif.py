@@ -30,7 +30,7 @@ def to_sarif(result: RunResult) -> str:
             "shortDescription": {"text": f.title},
             "fullDescription": {"text": f.description or f.title},
             "helpUri": "https://github.com/sthitaprajnas/redteam-harness",
-            "properties": {"owasp": f.owasp, "atlas": f.atlas,
+            "properties": {"owasp": f.owasp, "atlas": f.atlas, "nist": f.nist,
                            "security-severity": _sev_score(f.severity)},
             "defaultConfiguration": {"level": _LEVEL.get(f.severity, "warning")},
         })
