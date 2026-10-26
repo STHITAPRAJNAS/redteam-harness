@@ -159,7 +159,7 @@ def cmd_run(args) -> int:
 
 def cmd_demo(args) -> int:
     """Run against the bundled intentionally-vulnerable mock agent."""
-    from examples.mock_agent import build_callable_target, DEFAULT_PROFILE
+    from ._mocks import build_callable_target, DEFAULT_PROFILE
     cfg = RunConfig(
         target={"type": "callable"},  # placeholder; replaced below
         tier=Tier.parse(args.tier or 3),
@@ -181,7 +181,7 @@ def cmd_demo(args) -> int:
 def cmd_selftest(args) -> int:
     """Prove the harness works: it should break the vulnerable mock and leave
     the secure mock standing. No external services required."""
-    from examples.mock_agent import (
+    from ._mocks import (
         build_callable_target, build_secure_target, DEFAULT_PROFILE,
     )
     from .core.tier import Tier as _T
