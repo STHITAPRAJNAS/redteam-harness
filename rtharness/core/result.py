@@ -55,9 +55,12 @@ class Finding:
     severity: Severity
     owasp: List[str] = field(default_factory=list)     # e.g. ["LLM01:2025"]
     atlas: List[str] = field(default_factory=list)      # e.g. ["AML.T0051"]
+    nist: List[str] = field(default_factory=list)       # NIST AML, e.g. ["AML.evasion"]
     description: str = ""
     remediation: str = ""
     attempts: List[Attempt] = field(default_factory=list)
+    #: Origin of the finding: "rtharness" (native) or an external tool name.
+    source: str = "rtharness"
 
     @property
     def vulnerable(self) -> bool:
@@ -87,6 +90,8 @@ class Finding:
             "n_attempts": self.n_attempts,
             "owasp": self.owasp,
             "atlas": self.atlas,
+            "nist": self.nist,
+            "source": self.source,
             "description": self.description,
             "remediation": self.remediation,
             "attempts": [a.to_dict() for a in self.attempts],

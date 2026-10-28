@@ -34,6 +34,7 @@ class DirectInjectionProbe(ObjectiveProbe):
     severity = Severity.HIGH
     owasp = ["LLM01:2025"]
     atlas = ["AML.T0051", "AML.T0051.000"]
+    nist = ["AML.evasion"]
     min_tier = Tier.BASIC
     tags = ["injection", "chat", "a2a"]
     remediation = (
@@ -78,6 +79,7 @@ class IndirectInjectionProbe(ObjectiveProbe):
     severity = Severity.HIGH
     owasp = ["LLM01:2025"]
     atlas = ["AML.T0051", "AML.T0051.001"]
+    nist = ["AML.evasion"]
     min_tier = Tier.INTERMEDIATE
     tags = ["injection", "indirect", "rag", "chat", "a2a"]
     remediation = (

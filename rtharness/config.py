@@ -30,6 +30,17 @@ class RunConfig:
     def from_dict(cls, data: Dict[str, Any]) -> "RunConfig":
         if "target" not in data:
             raise ValueError("config must contain a 'target' section")
+        if data.get("preset"):
+            from . import presets
+            base = presets.get(data["preset"])
+            # Preset fills gaps; explicitly-set keys in `data` win.
+            merged = dict(base)
+            for k, v in data.items():
+                if k == "preset":
+                    continue
+                if v not in (None, [], {}):
+                    merged[k] = v
+            data = merged
         return cls(
             target=data["target"],
             tier=Tier.parse(data.get("tier", 1)),

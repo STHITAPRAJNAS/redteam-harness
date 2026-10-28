@@ -11,6 +11,8 @@ from .http_chat import HTTPChatTarget
 from .openai_compat import OpenAIChatTarget
 from .a2a import A2ATarget
 from .adk import ADKTarget
+from .mcp import MCPTarget
+from .frameworks import LangServeTarget, AnthropicTarget
 
 __all__ = [
     "CallableTarget",
@@ -18,6 +20,9 @@ __all__ = [
     "OpenAIChatTarget",
     "A2ATarget",
     "ADKTarget",
+    "MCPTarget",
+    "LangServeTarget",
+    "AnthropicTarget",
     "from_config",
 ]
 
@@ -41,6 +46,9 @@ def from_config(cfg: dict):
         "openai_compat": OpenAIChatTarget,
         "a2a": A2ATarget,
         "adk": ADKTarget,
+        "mcp": MCPTarget,
+        "langserve": LangServeTarget,
+        "anthropic": AnthropicTarget,
     }
     if kind not in builders:
         raise ValueError(
